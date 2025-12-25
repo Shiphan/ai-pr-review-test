@@ -1,0 +1,10 @@
+[package]
+name = "eucalyptus-twig"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+futures = "0.3.31"
+gpui = { git = "https://github.com/zed-industries/zed.git", default-features = false, features = ["wayland"] }
+gpui-net = { git = "https://github.com/zed-industries/zed.git", package = "net" }
+time = { version = "0.3.44", default-features = false, features = ["formatting", "local-offset"] }
