@@ -1,7 +1,9 @@
+use std::ops::Deref;
+
 use gpui::{
-    App, ClickEvent, Context, DisplayId, ElementId, Entity, FocusHandle, FontWeight, KeyBinding,
-    StatefulInteractiveElement, Window, WindowBackgroundAppearance, WindowKind, WindowOptions,
-    actions, black, div,
+    App, ClickEvent, Context, ElementId, Entity, FocusHandle, FontWeight, KeyBinding,
+    PlatformDisplay, StatefulInteractiveElement, Window, WindowBackgroundAppearance, WindowKind,
+    WindowOptions, actions, black, div,
     layer_shell::{KeyboardInteractivity, Layer, LayerShellOptions},
     opaque_grey,
     prelude::*,
@@ -34,17 +36,28 @@ impl PowerMenu {
             }
         })
     }
-    pub fn window_options(display_id: Option<DisplayId>) -> WindowOptions {
+    pub fn window_options(
+        display: Option<impl Deref<Target = impl PlatformDisplay + ?Sized>>,
+    ) -> WindowOptions {
+        println!(
+            "window_bounds = {:#?}",
+            display
+                .as_ref()
+                .map(|x| gpui::WindowBounds::Windowed(x.bounds()))
+        );
         WindowOptions {
+            window_bounds: display
+                .as_ref()
+                .map(|x| gpui::WindowBounds::Windowed(x.bounds())),
             titlebar: None,
-            display_id,
-            window_background: WindowBackgroundAppearance::Transparent,
             kind: WindowKind::LayerShell(LayerShellOptions {
                 namespace: "eucalyptus-twig-power-menu".to_owned(),
                 layer: Layer::Overlay,
                 keyboard_interactivity: KeyboardInteractivity::Exclusive,
                 ..Default::default()
             }),
+            display_id: display.as_ref().map(|x| x.id()),
+            window_background: WindowBackgroundAppearance::Transparent,
             ..Default::default()
         }
     }

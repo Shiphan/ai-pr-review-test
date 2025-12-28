@@ -17,9 +17,9 @@ impl Render for PowerMenu {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         widget_wrapper()
             .id("button_left")
-            .on_click(|_click_event, _window, cx| {
+            .on_click(|_click_event, window, cx| {
                 cx.open_window(
-                    crate::power_menu::PowerMenu::window_options(None),
+                    crate::power_menu::PowerMenu::window_options(window.display(cx)),
                     crate::power_menu::PowerMenu::build_root_view,
                 )
                 .unwrap();

@@ -1,7 +1,7 @@
-use std::{pin::Pin, task::Poll, time::Duration};
+use std::{ops::Deref, pin::Pin, task::Poll, time::Duration};
 
 use gpui::{
-    AnyView, App, Application, Bounds, Context, DisplayId, Entity, Pixels, Size, Window,
+    AnyView, App, Application, Bounds, Context, Entity, Pixels, PlatformDisplay, Size, Window,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div,
     layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
     point,
@@ -22,7 +22,7 @@ fn main() {
         cx.spawn(async |cx| {
             // TODO: by default, gpui will not wait for wayland to tell us displays information
             // wait 10 poll for wayland to tell us all screens
-            // PollCounter::new(10).await;
+            PollCounter::new(10).await;
             // or wait a bit for wayland to tell us all screens
             cx.background_executor()
                 // .timer(Duration::from_nanos(1000))
@@ -39,14 +39,8 @@ fn main() {
                 }
 
                 for display in displays {
-                    let mut screen_bounds = display.bounds();
-                    screen_bounds.size.height = px(HEIGHT);
-
-                    cx.open_window(
-                        Bar::window_options(Some(display.id())),
-                        Bar::build_root_view,
-                    )
-                    .unwrap();
+                    cx.open_window(Bar::window_options(Some(display)), Bar::build_root_view)
+                        .unwrap();
                 }
             })
             .unwrap();
@@ -69,24 +63,30 @@ impl Bar {
                 cx.new(widget::Clock::new).into(),
                 cx.new(widget::Display::new).into(),
             ],
-            center: vec![
-                cx.new(widget::HyprlandWorkspace::new).into(),
-            ],
-            right: vec![
-                cx.new(widget::Quit::new).into(),
-            ],
+            center: vec![cx.new(widget::HyprlandWorkspace::new).into()],
+            right: vec![cx.new(widget::Quit::new).into()],
         })
     }
-    pub fn window_options(display_id: Option<DisplayId>) -> WindowOptions {
+    pub fn window_options(
+        display: Option<impl Deref<Target = impl PlatformDisplay + ?Sized>>,
+    ) -> WindowOptions {
         WindowOptions {
-            titlebar: None,
-            display_id,
-            window_background: WindowBackgroundAppearance::Transparent,
-            window_bounds: Some(WindowBounds::Windowed(Bounds {
-                origin: point(px(0.0), px(0.0)),
+            window_bounds: Some(WindowBounds::Windowed(
                 // TODO: I want the window height to fit the content, and the width based on screen width
-                size: Size::new(px(WIDTH), px(HEIGHT)),
-            })),
+                if let Some(display) = display.as_ref()
+                    && false
+                {
+                    let mut bounds = display.bounds();
+                    bounds.size.height = px(HEIGHT);
+                    bounds
+                } else {
+                    Bounds {
+                        origin: point(px(0.0), px(0.0)),
+                        size: Size::new(px(WIDTH), px(HEIGHT)),
+                    }
+                },
+            )),
+            titlebar: None,
             kind: WindowKind::LayerShell(LayerShellOptions {
                 namespace: "eucalyptus-twig".to_owned(),
                 layer: Layer::Top,
@@ -97,6 +97,8 @@ impl Bar {
                 keyboard_interactivity: KeyboardInteractivity::None,
                 ..Default::default()
             }),
+            display_id: display.as_ref().map(|x| x.id()),
+            window_background: WindowBackgroundAppearance::Transparent,
             ..Default::default()
         }
     }
