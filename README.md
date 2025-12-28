@@ -10,6 +10,7 @@ TODO:
     - [ ] animation
 - [ ] battery/power
 - [x] clock
+    - [x] analog clock icon
 - [ ] wayland/xwayland (hyprland)
 - [ ] systray
     - <https://specifications.freedesktop.org/systemtray/latest/>

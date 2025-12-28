@@ -1,17 +1,17 @@
 use std::time::Duration;
 
-use gpui::{Context, IntoElement, ParentElement, Render, Window};
+use gpui::{
+    Context, Div, IntoElement, ParentElement, PathBuilder, PathStyle, Render, StrokeOptions,
+    Styled, Window, black, canvas, div, point, px, rems, white,
+};
+use lyon::path::LineCap;
 use time::{
-    OffsetDateTime,
+    OffsetDateTime, Time,
     error::InvalidFormatDescription,
     format_description::{self, OwnedFormatItem},
 };
 
 use crate::widget::{Widget, widget_wrapper};
-
-const CLOCK_ICON: [&'static str; 12] = [
-    "󱑊 ", "󱐿 ", "󱑀 ", "󱑁 ", "󱑃 ", "󱑂 ", "󱑄 ", "󱑅 ", "󱑆 ", "󱑇 ", "󱑈 ", "󱑉 ",
-];
 
 pub struct Clock {
     format_description: Result<OwnedFormatItem, InvalidFormatDescription>,
@@ -27,8 +27,11 @@ impl Widget for Clock {
             cx.spawn(async move |this, cx| {
                 loop {
                     let _ = this.update(cx, |_, cx| cx.notify());
+                    let now = OffsetDateTime::now_local().unwrap();
+                    let next = Time::from_hms(now.time().hour(), now.time().minute(), 0).unwrap()
+                        + Duration::from_mins(1);
                     cx.background_executor()
-                        .timer(Duration::from_millis(500))
+                        .timer(now.time().duration_until(next).unsigned_abs())
                         .await;
                 }
             })
@@ -41,26 +44,69 @@ impl Widget for Clock {
 
 impl Render for Clock {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let clock = match &self.format_description {
-            Ok(format_description) => current_time(format_description),
-            Err(e) => format!("Error while parsing time format description: {e}"),
+        let format_description = match &self.format_description {
+            Ok(x) => x,
+            Err(e) => {
+                return widget_wrapper()
+                    .child(format!("Error while parsing time format description: {e}"));
+            }
         };
-        widget_wrapper().child(clock)
+        match current_time(format_description) {
+            Ok((clock, formatted_time)) => widget_wrapper()
+                .flex()
+                .items_center()
+                .gap(rems(0.25))
+                .child(clock)
+                .child(formatted_time),
+            Err(e) => widget_wrapper().child(e),
+        }
     }
 }
 
 // TODO: maybe we should use icu4x for localized formatting?
-fn current_time(format_description: &OwnedFormatItem) -> String {
-    let time = match OffsetDateTime::now_local() {
-        Ok(x) => x,
-        Err(e) => return format!("Error while getting local time: {e}"),
-    };
-    format!(
-        "{}{}",
-        CLOCK_ICON.get(time.hour() as usize % 12).unwrap_or(&""),
-        match time.format(format_description) {
-            Ok(x) => x,
-            Err(e) => return format!("Error while formatting time `{time}`: {e}"),
-        }
-    )
+fn current_time(format_description: &OwnedFormatItem) -> Result<(Div, String), String> {
+    let time =
+        OffsetDateTime::now_local().map_err(|e| format!("Error while getting local time: {e}"))?;
+    let clock = div().relative().size_4().rounded_full().bg(white()).child(
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
+                    StrokeOptions::default()
+                        .with_start_cap(LineCap::Round)
+                        .with_end_cap(LineCap::Round)
+                        .with_line_width(2.0),
+                ));
+                path.move_to(point(px(0.0), px(0.0)));
+                path.line_to(point(px(0.0), px(-4.4)));
+                path.rotate(time.time().minute() as f32 * 6.0);
+                path.translate(bounds.center());
+                match path.build() {
+                    Ok(path) => window.paint_path(path, black()),
+                    Err(e) => println!("Error while building path: {e}"),
+                }
+
+                let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
+                    StrokeOptions::default()
+                        .with_start_cap(LineCap::Round)
+                        .with_end_cap(LineCap::Round)
+                        .with_line_width(2.0),
+                ));
+                path.move_to(point(px(0.0), px(0.0)));
+                path.line_to(point(px(0.0), px(-2.6)));
+                path.rotate(time.time().hour() as f32 * 30.0 + time.time().minute() as f32 * 0.5);
+                path.translate(bounds.center());
+                match path.build() {
+                    Ok(path) => window.paint_path(path, black()),
+                    Err(e) => println!("Error while building path: {e}"),
+                }
+            },
+        )
+        .size_full(),
+    );
+    let formatted_time = time
+        .format(format_description)
+        .map_err(|e| format!("Error while formatting time `{time}`: {e}"))?;
+
+    Ok((clock, formatted_time))
 }
